@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>local.touchdriver.TouchDriver</string>
+	<string>com.oyuncakliseyler.TouchDriver</string>
 	<key>CFBundleName</key>
 	<string>TouchDriver</string>
 	<key>CFBundleDisplayName</key>

@@ -20,7 +20,8 @@ extension or a DriverKit entitlement.
 
 1. Download `TouchDriver.zip` from the [latest release](../../releases/latest) and unzip it.
 2. Move `TouchDriver.app` to `/Applications`.
-3. The app is ad-hoc signed and not notarized, so macOS blocks it the first time. Either
+3. Release builds are signed with a Developer ID certificate (OYUNCAKLI SEYLER, team
+   `6943ZNMPGK`) but not notarized, so macOS still warns the first time. Either
    right-click the app and choose **Open**, or run:
    ```bash
    xattr -dr com.apple.quarantine /Applications/TouchDriver.app
@@ -64,9 +65,16 @@ Requires Xcode command-line tools (Swift 5.9+), macOS 13 or later.
 ./build.sh
 ```
 
-The script builds a universal `build/TouchDriver.app`, signs it ad-hoc and runs the
-mapping self-test. macOS ties the privacy permissions to the signature, so after a
-rebuild you may need to switch TouchDriver off and on again in Privacy & Security.
+The script builds a universal `build/TouchDriver.app`, signs it and runs the mapping
+self-test. By default it signs ad-hoc. To sign with a Developer ID certificate
+(hardened runtime + secure timestamp), pass its name or SHA-1 hash:
+
+```bash
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./build.sh
+```
+
+macOS ties the privacy permissions to the signature, so after an ad-hoc rebuild you
+may need to switch TouchDriver off and on again in Privacy & Security.
 
 ## Troubleshooting
 

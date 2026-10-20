@@ -18,9 +18,16 @@ done
 lipo -create build/obj/TouchDriver-arm64 build/obj/TouchDriver-x86_64 -output "$BIN"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
-# Ad-hoc signature. macOS ties Input Monitoring / Accessibility grants to it,
-# so after a rebuild you may need to re-enable TouchDriver in Privacy & Security.
-codesign --force --sign - "$APP"
+# Signing. Set SIGN_IDENTITY to a "Developer ID Application" certificate name or
+# SHA-1 hash to sign for distribution (hardened runtime + secure timestamp);
+# without it the app is signed ad-hoc. macOS ties Input Monitoring / Accessibility
+# grants to the signature, so an ad-hoc rebuild may need re-enabling in Privacy & Security.
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+else
+  codesign --force --sign - "$APP"
+fi
+codesign --verify --strict "$APP"
 
 "$BIN" --selftest
 echo "Built $APP"
