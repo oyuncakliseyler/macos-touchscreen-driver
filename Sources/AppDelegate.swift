@@ -21,6 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reader.onSample = { [weak self] sample in self?.handle(sample) }
         reader.onDevicesChanged = { [weak self] in self?.updateIcon() }
         reader.start()
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.reader.reapplyDeviceMode() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

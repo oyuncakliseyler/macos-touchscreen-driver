@@ -30,7 +30,7 @@ final class TouchReader {
 
     private(set) var openFailed = false
     private var manager: IOHIDManager?
-    private var devices: [UInt: DeviceState] = [:]
+    private var devices: [UInt64: DeviceState] = [:]
     private var flushScheduled = false
 
     var summaries: [DeviceSummary] {
@@ -73,6 +73,11 @@ final class TouchReader {
         onDevicesChanged?()
     }
 
+    /// Panels can drop back to their default mode after sleep; call this on wake.
+    func reapplyDeviceMode() {
+        devices.values.forEach { $0.enableMultiTouchMode() }
+    }
+
     private func close(_ state: DeviceState) {
         IOHIDDeviceUnscheduleFromRunLoop(state.device, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceClose(state.device, IOOptionBits(state.seized ? kIOHIDOptionsTypeSeizeDevice : kIOHIDOptionsTypeNone))
@@ -80,8 +85,12 @@ final class TouchReader {
 
     // MARK: - Devices
 
-    private func key(_ device: IOHIDDevice) -> UInt {
-        UInt(bitPattern: Unmanaged.passUnretained(device).toOpaque())
+    /// One device matches several usage rules and may arrive as several IOHIDDevice
+    /// objects, so key devices by their IORegistry entry instead of by object.
+    private func key(_ device: IOHIDDevice) -> UInt64 {
+        var id: UInt64 = 0
+        IORegistryEntryGetRegistryEntryID(IOHIDDeviceGetService(device), &id)
+        return id
     }
 
     private func deviceAdded(_ device: IOHIDDevice) {
@@ -110,6 +119,8 @@ final class TouchReader {
             onDevicesChanged?()
             return
         }
+
+        state.enableMultiTouchMode()
 
         let context = Unmanaged.passUnretained(self).toOpaque()
         IOHIDDeviceRegisterInputValueCallback(device, { context, _, _, value in
@@ -237,6 +248,37 @@ private final class DeviceState {
         countCookie = inputs.first { usage($0, 0x0D, 0x54) }.map { IOHIDElementGetCookie($0) } // Contact Count
         xRange = (Double(IOHIDElementGetLogicalMin(x)), Double(IOHIDElementGetLogicalMax(x)))
         yRange = (Double(IOHIDElementGetLogicalMin(y)), Double(IOHIDElementGetLogicalMax(y)))
+
+        // Windows-style touchscreens (Device Configuration collection) stay silent or in
+        // mouse mode until the host sets Device Mode (0x0D/0x52) to 2, multi-input.
+        let features = elements.filter { IOHIDElementGetType($0) == kIOHIDElementTypeFeature }
+        if let mode = features.first(where: { usage($0, 0x0D, 0x52) }) {
+            let reportID = IOHIDElementGetReportID(mode)
+            modeReport = (reportID, features.filter { IOHIDElementGetReportID($0) == reportID }
+                .map { (usage($0, 0x0D, 0x52) ? 2 : 0, Int(IOHIDElementGetReportSize($0) * IOHIDElementGetReportCount($0))) })
+        } else {
+            modeReport = nil
+        }
+    }
+
+    /// Device Mode feature report: its ID and each field as (value, bit width), in order.
+    private let modeReport: (id: UInt32, fields: [(value: Int, bits: Int)])?
+
+    func enableMultiTouchMode() {
+        guard let modeReport else { return }
+        // HID packs fields little-endian, starting at bit 0 after the report ID byte.
+        let totalBits = modeReport.fields.reduce(0) { $0 + $1.bits }
+        var bytes = [UInt8](repeating: 0, count: 1 + (totalBits + 7) / 8)
+        bytes[0] = UInt8(truncatingIfNeeded: modeReport.id)
+        var offset = 0
+        for field in modeReport.fields {
+            for bit in 0..<field.bits where field.value >> bit & 1 == 1 {
+                bytes[1 + (offset + bit) / 8] |= 1 << ((offset + bit) % 8)
+            }
+            offset += field.bits
+        }
+        let result = IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, CFIndex(modeReport.id), bytes, bytes.count)
+        NSLog("TouchDriver: set %@ to multi-touch mode (0x%08x)", name, result)
     }
 
     /// Buffers a value for the current report. Returns true if it is one we use.
