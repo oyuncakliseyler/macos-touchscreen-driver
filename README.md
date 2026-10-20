@@ -21,11 +21,14 @@ extension or a DriverKit entitlement.
 1. Download `TouchDriver.zip` from the [latest release](../../releases/latest) and unzip it.
 2. Move `TouchDriver.app` to `/Applications`.
 3. Release builds are signed with a Developer ID certificate (OYUNCAKLI SEYLER, team
-   `6943ZNMPGK`) but not notarized, so macOS still warns the first time. Either
-   right-click the app and choose **Open**, or run:
+   `6943ZNMPGK`) but not notarized, so the first launch shows a warning offering
+   **Move to Trash**. Click **Done** instead. Then open System Settings → Privacy &
+   Security, scroll down, and click **Open Anyway** next to TouchDriver. Or remove the
+   download flag before the first launch:
    ```bash
    xattr -dr com.apple.quarantine /Applications/TouchDriver.app
    ```
+   On macOS 15 and later, right-click → Open no longer skips this warning.
 4. Start the app. When macOS asks, allow **Input Monitoring** and **Accessibility** in
    System Settings → Privacy & Security. If touches do nothing after you grant them,
    quit and reopen the app.
